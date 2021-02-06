@@ -2,7 +2,7 @@ version: '3.4'
 
 services:
   samba:
-    image: dperson/samba
+    build: .
     environment:
       TZ: 'EST5EDT'
     networks:
@@ -19,9 +19,10 @@ services:
     stdin_open: true
     tty: true
     volumes:
-      - /mnt:/mnt:z
-      - /mnt2:/mnt2:z
-    command: '-s "Mount;/mnt" -s "Bobs Volume;/mnt2;yes;no;no;bob" -u "bob;bobspasswd" -p'
+      - $PWD/conf:/conf
+      - $PWD/users:/home/
 
+    command: '-C "alumnos.txt;profes.txt" -C "alumnos1.txt;profes1.txt"'
+ 
 networks:
   default:

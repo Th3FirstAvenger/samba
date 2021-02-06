@@ -87,9 +87,10 @@ import() { local file="$1" name id
 # Return: result
 perms() { local i file=/etc/samba/smb.conf
     for i in $(awk -F ' = ' '/   path = / {print $2}' $file); do
+        echo ${i}
         chown -Rh smbuser. $i
-        find $i -type d ! -perm 775 -exec chmod 775 {} \;
-        find $i -type f ! -perm 0664 -exec chmod 0664 {} \;
+        find $i -type d ! -perm 775 -exec chmod 700 {} \;
+        find $i -type f ! -perm 0664 -exec chmod 0600 {} \;
     done
 }
 export -f perms
@@ -156,16 +157,86 @@ smb() { local file=/etc/samba/smb.conf
 #   id) for user
 #   group) for user
 #   gid) for group
-# Return: user added to container
-user() { local name="$1" passwd="$2" id="${3:-""}" group="${4:-""}" \
+# Return: user added to container marc;1234;1001;alu
+user() { local name="$1" passwd="$2" group="${3:-""}" id="${4:-""}" \
                 gid="${5:-""}"
+
     [[ "$group" ]] && { grep -q "^$group:" /etc/group ||
                 addgroup ${gid:+--gid $gid }"$group"; }
     grep -q "^$name:" /etc/passwd ||
         adduser -D -H ${group:+-G $group} ${id:+-u $id} "$name"
+        usermod -aG $group $name
     echo -e "$passwd\n$passwd" | smbpasswd -s -a "$name"
 }
+## CUSTOM 
 
+function Classe(){
+    alu=$1
+    prof=$2
+
+    alu_read=$(cat /conf/${alu} | awk -F';' '{print $1}' | xargs | tr ' ' ',')
+    prof_read=$(cat /conf/${prof} | awk -F';' '{print $1}' | xargs | tr ' ' ',')
+
+
+    for alumno in $(cat /conf/${alu}); do
+      user_al=$(echo "${alumno};alumno;;")
+      user_name=$(echo "${alumno}" | awk -F';' '{print $1}')
+      folder=$(echo "/home/${user_name}")
+      mkdir -m 700 -p ${folder}/Notas
+       
+      smb_conf=$(echo "${user_name};${folder};yes;no;no;${prof_read};${user_name};${prof_read};Carpeta de l'Alumne ${user_name}")
+	    
+      eval user $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< ${user_al})
+      eval share $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< ${smb_conf})
+
+    done
+    
+    for profe in $(cat /conf/${prof}); do
+      user_pr=$(echo "${profe};professor;;")
+      user_name=$(echo "${profe}" | awk -F';' '{print $1}')
+      
+      folder=$(echo "/home/${user_name}")
+      mkdir -m 740 -p ${folder}/Apunts
+      
+      smb_conf=$(echo "${user_name};${folder};yes;no;no;;${user_name};${prof_read};Carpeta de l'Alumne ${user_name}")
+
+
+      ## SMB config
+	    eval user $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< ${user_pr})
+      eval share $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< ${smb_conf})
+    done
+
+    ACL $alu $prof
+}
+
+function ACL(){
+  
+    alu=$1
+    prof=$2
+
+    prf_permisos=$(cat /conf/${alu} | awk -F';' '{print "u:" $1}' | xargs | sed 's/ /:rx,/g')
+    alu_permisos=$(cat /conf/${prof} | awk -F';' '{print "u:" $1}' | xargs | sed 's/ /:rx,/g')
+
+
+    for alumno in $(cat /conf/${alu}); do
+      user_name=$(echo "${alumno}" | awk -F';' '{print $1}')
+      folder=$(echo "/home/${user_name}")
+      
+      #ACL 
+      setfacl -R -m "${alu_permisos}:rx,u:${user_name}:rwx" ${folder}
+
+    done
+    
+    for profe in $(cat /conf/${prof}); do
+      user_name=$(echo "${profe}" | awk -F';' '{print $1}')
+      
+      folder=$(echo "/home/${user_name}")
+      
+      #ACL 
+      setfacl -R --modify="${prf_permisos}:rx,u:${user_name}:rwx,g:professor:r" ${folder}
+    done
+}
+## FINISH CUSTOM 
 ### workgroup: set the workgroup
 # Arguments:
 #   workgroup) the name to set
@@ -232,6 +303,7 @@ Options (fields in '[]' are optional, '<>' are required):
     -I          Add an include option at the end of the smb.conf
                 required arg: \"<include file path>\"
                 <include file path> in the container, e.g. a bind mount
+    -C          file_name alumnos, file_name profes
 
 The 'command' (if provided and valid) will be run instead of samba
 " >&2
@@ -241,7 +313,7 @@ The 'command' (if provided and valid) will be run instead of samba
 [[ "${USERID:-""}" =~ ^[0-9]+$ ]] && usermod -u $USERID -o smbuser
 [[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && groupmod -g $GROUPID -o smb
 
-while getopts ":hc:G:g:i:nprs:Su:Ww:I:" opt; do
+while getopts ":hc:G:g:i:nprs:Su:Ww:I:C:" opt; do
     case "$opt" in
         h) usage ;;
         c) charmap "$OPTARG" ;;
@@ -256,6 +328,7 @@ while getopts ":hc:G:g:i:nprs:Su:Ww:I:" opt; do
         u) eval user $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< $OPTARG) ;;
         w) workgroup "$OPTARG" ;;
         W) widelinks ;;
+	      C) eval Classe $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< $OPTARG) ;;
         I) include "$OPTARG" ;;
         "?") echo "Unknown option: -$OPTARG"; usage 1 ;;
         ":") echo "No argument value for option: -$OPTARG"; usage 2 ;;
