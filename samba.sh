@@ -183,8 +183,8 @@ function Classe(){
       user_name=$(echo "${alumno}" | awk -F';' '{print $1}')
       folder=$(echo "/home/${user_name}")
       mkdir -m 700 -p ${folder}/Notas
-       
-      smb_conf=$(echo "${user_name};${folder};yes;no;no;${prof_read};${user_name};${prof_read};Carpeta de l'Alumne ${user_name}")
+      echo 'prova per baixada' > ${folder}/Notas/baixada.txt    
+      smb_conf=$(echo "${user_name};${folder};yes;yes;no;${prof_read},${user_name};${user_name};${user_name};Carpeta de l'Alumne ${user_name}")
 	    
       eval user $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< ${user_al})
       eval share $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< ${smb_conf})
@@ -197,8 +197,9 @@ function Classe(){
       
       folder=$(echo "/home/${user_name}")
       mkdir -m 740 -p ${folder}/Apunts
+      echo 'prova per baixada' > ${folder}/Apunts/baixada.txt    
       
-      smb_conf=$(echo "${user_name};${folder};yes;no;no;;${user_name};${prof_read};Carpeta de l'Alumne ${user_name}")
+      smb_conf=$(echo "${user_name};${folder};yes;yes;no;${alu_read},${user_name};${user_name};${user_name};Carpeta de l'Alumne ${user_name}")
 
 
       ## SMB config
